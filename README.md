@@ -1,9 +1,9 @@
 # VeriFi: AI Escrow Marketplace
 
-Platform escrow terdesentralisasi yang didukung AI untuk verifikasi pekerjaan dan pembayaran instan, dibangun di atas blockchain Avalanche.
+A decentralized, AI-powered escrow platform for work verification and instant payments, built on the Avalanche blockchain.
 
-## Ringkasan
+## Summary
 
-Proyek ini bertujuan untuk mengatasi masalah utama yang dihadapi oleh para freelancer: biaya transaksi yang tinggi, waktu penyelesaian pembayaran yang lama, dan sengketa kualitas pekerjaan yang subjektif. VeriFi mengintegrasikan Smart Contract Escrow, AI Agent sebagai wasit otomatis, dan kecepatan dari Avalanche untuk menciptakan solusi yang adil, transparan, dan efisien.
+This project aims to solve the core problems faced by global freelancers: high transaction fees, long payment settlement times, and subjective work quality disputes. VeriFi integrates a Smart Contract Escrow, an AI Agent as an automatic arbiter, and the speed of Avalanche to create a fair, transparent, and efficient solution.
 
-Dokumen perencanaan pengembangan lengkap dapat ditemukan di `docs/dev/development_plan.md`.
+The complete development planning document can be found at docs/development_plan.md.
