@@ -1,9 +1,9 @@
-import React, {
+import {
   createContext,
   useContext,
   useState,
   useEffect,
-  ReactNode,
+  type ReactNode,
 } from "react";
 import { BrowserProvider, JsonRpcSigner, Contract, ethers } from "ethers";
 import AIEscrowMarketplaceJSON from "../artifacts/AIEscrowMarketplace.json"; // <-- Correct way to import JSON

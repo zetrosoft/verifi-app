@@ -63,9 +63,12 @@ Follow these steps to set up the project locally.
     In a new terminal, from the `contracts` directory, deploy your contracts to the local Hardhat network.
     ```bash
     cd ../contracts
+    # Ensure nvm is sourced and Node.js v20+ is used if you encounter issues
+    # source ~/.nvm/nvm.sh && nvm use 20
     npx hardhat run scripts/deploy.ts --network localhost
-    # Update frontend/.env and ai-agent/.env with the deployed contract address.
     ```
+    The contract should be deployed to `0x5FbDB2315678afecb367f032d93F642f64180aa3`.
+    **ACTION REQUIRED:** Update `frontend/.env` and `ai-agent/.env` with this deployed contract address for `REACT_APP_CONTRACT_ADDRESS` and `CONTRACT_ADDRESS` respectively.
 
 ## Summary
 

@@ -23,17 +23,45 @@ import type {
   TypedContractMethod,
 } from "../common";
 
+export declare namespace AIEscrowMarketplace {
+  export type BidStruct = {
+    bidId: BigNumberish;
+    jobId: BigNumberish;
+    freelancer: AddressLike;
+    proposalText: string;
+  };
+
+  export type BidStructOutput = [
+    bidId: bigint,
+    jobId: bigint,
+    freelancer: string,
+    proposalText: string
+  ] & {
+    bidId: bigint;
+    jobId: bigint;
+    freelancer: string;
+    proposalText: string;
+  };
+}
+
 export interface AIEscrowMarketplaceInterface extends Interface {
   getFunction(
     nameOrSignature:
+      | "acceptBid"
       | "aiAgentAddress"
-      | "createJob"
-      | "depositFunds"
+      | "bidsByJobId"
+      | "depositForJob"
+      | "getBidsForJob"
+      | "getJobCount"
       | "jobs"
+      | "jobsByClient"
+      | "jobsByFreelancer"
       | "nextJobId"
       | "owner"
+      | "postJob"
       | "renounceOwnership"
       | "setAiAgentAddress"
+      | "submitBid"
       | "submitWork"
       | "transferOwnership"
       | "verifyWork"
@@ -42,29 +70,55 @@ export interface AIEscrowMarketplaceInterface extends Interface {
   getEvent(
     nameOrSignatureOrTopic:
       | "AiAgentAddressUpdated"
+      | "BidAccepted"
+      | "BidSubmitted"
       | "FundsDeposited"
       | "FundsReleased"
-      | "JobCreated"
+      | "JobPosted"
       | "OwnershipTransferred"
       | "WorkSubmitted"
       | "WorkVerified"
   ): EventFragment;
 
   encodeFunctionData(
+    functionFragment: "acceptBid",
+    values: [BigNumberish, BigNumberish]
+  ): string;
+  encodeFunctionData(
     functionFragment: "aiAgentAddress",
     values?: undefined
   ): string;
   encodeFunctionData(
-    functionFragment: "createJob",
-    values: [AddressLike, BigNumberish, string]
+    functionFragment: "bidsByJobId",
+    values: [BigNumberish, BigNumberish]
   ): string;
   encodeFunctionData(
-    functionFragment: "depositFunds",
+    functionFragment: "depositForJob",
     values: [BigNumberish]
   ): string;
+  encodeFunctionData(
+    functionFragment: "getBidsForJob",
+    values: [BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "getJobCount",
+    values?: undefined
+  ): string;
   encodeFunctionData(functionFragment: "jobs", values: [BigNumberish]): string;
+  encodeFunctionData(
+    functionFragment: "jobsByClient",
+    values: [AddressLike, BigNumberish]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "jobsByFreelancer",
+    values: [AddressLike, BigNumberish]
+  ): string;
   encodeFunctionData(functionFragment: "nextJobId", values?: undefined): string;
   encodeFunctionData(functionFragment: "owner", values?: undefined): string;
+  encodeFunctionData(
+    functionFragment: "postJob",
+    values: [string, string, BigNumberish, BigNumberish]
+  ): string;
   encodeFunctionData(
     functionFragment: "renounceOwnership",
     values?: undefined
@@ -72,6 +126,10 @@ export interface AIEscrowMarketplaceInterface extends Interface {
   encodeFunctionData(
     functionFragment: "setAiAgentAddress",
     values: [AddressLike]
+  ): string;
+  encodeFunctionData(
+    functionFragment: "submitBid",
+    values: [BigNumberish, string]
   ): string;
   encodeFunctionData(
     functionFragment: "submitWork",
@@ -86,18 +144,39 @@ export interface AIEscrowMarketplaceInterface extends Interface {
     values: [BigNumberish, boolean]
   ): string;
 
+  decodeFunctionResult(functionFragment: "acceptBid", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "aiAgentAddress",
     data: BytesLike
   ): Result;
-  decodeFunctionResult(functionFragment: "createJob", data: BytesLike): Result;
   decodeFunctionResult(
-    functionFragment: "depositFunds",
+    functionFragment: "bidsByJobId",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "depositForJob",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getBidsForJob",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "getJobCount",
     data: BytesLike
   ): Result;
   decodeFunctionResult(functionFragment: "jobs", data: BytesLike): Result;
+  decodeFunctionResult(
+    functionFragment: "jobsByClient",
+    data: BytesLike
+  ): Result;
+  decodeFunctionResult(
+    functionFragment: "jobsByFreelancer",
+    data: BytesLike
+  ): Result;
   decodeFunctionResult(functionFragment: "nextJobId", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "owner", data: BytesLike): Result;
+  decodeFunctionResult(functionFragment: "postJob", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "renounceOwnership",
     data: BytesLike
@@ -106,6 +185,7 @@ export interface AIEscrowMarketplaceInterface extends Interface {
     functionFragment: "setAiAgentAddress",
     data: BytesLike
   ): Result;
+  decodeFunctionResult(functionFragment: "submitBid", data: BytesLike): Result;
   decodeFunctionResult(functionFragment: "submitWork", data: BytesLike): Result;
   decodeFunctionResult(
     functionFragment: "transferOwnership",
@@ -126,12 +206,62 @@ export namespace AiAgentAddressUpdatedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace FundsDepositedEvent {
-  export type InputTuple = [jobId: BigNumberish, amount: BigNumberish];
-  export type OutputTuple = [jobId: bigint, amount: bigint];
+export namespace BidAcceptedEvent {
+  export type InputTuple = [
+    jobId: BigNumberish,
+    bidId: BigNumberish,
+    client: AddressLike,
+    freelancer: AddressLike
+  ];
+  export type OutputTuple = [
+    jobId: bigint,
+    bidId: bigint,
+    client: string,
+    freelancer: string
+  ];
   export interface OutputObject {
     jobId: bigint;
-    amount: bigint;
+    bidId: bigint;
+    client: string;
+    freelancer: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace BidSubmittedEvent {
+  export type InputTuple = [
+    jobId: BigNumberish,
+    bidId: BigNumberish,
+    freelancer: AddressLike,
+    proposalText: string
+  ];
+  export type OutputTuple = [
+    jobId: bigint,
+    bidId: bigint,
+    freelancer: string,
+    proposalText: string
+  ];
+  export interface OutputObject {
+    jobId: bigint;
+    bidId: bigint;
+    freelancer: string;
+    proposalText: string;
+  }
+  export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
+  export type Filter = TypedDeferredTopicFilter<Event>;
+  export type Log = TypedEventLog<Event>;
+  export type LogDescription = TypedLogDescription<Event>;
+}
+
+export namespace FundsDepositedEvent {
+  export type InputTuple = [jobId: BigNumberish, price: BigNumberish];
+  export type OutputTuple = [jobId: bigint, price: bigint];
+  export interface OutputObject {
+    jobId: bigint;
+    price: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -143,13 +273,13 @@ export namespace FundsReleasedEvent {
   export type InputTuple = [
     jobId: BigNumberish,
     recipient: AddressLike,
-    amount: BigNumberish
+    price: BigNumberish
   ];
-  export type OutputTuple = [jobId: bigint, recipient: string, amount: bigint];
+  export type OutputTuple = [jobId: bigint, recipient: string, price: bigint];
   export interface OutputObject {
     jobId: bigint;
     recipient: string;
-    amount: bigint;
+    price: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -157,24 +287,24 @@ export namespace FundsReleasedEvent {
   export type LogDescription = TypedLogDescription<Event>;
 }
 
-export namespace JobCreatedEvent {
+export namespace JobPostedEvent {
   export type InputTuple = [
     jobId: BigNumberish,
     client: AddressLike,
-    freelancer: AddressLike,
-    amount: BigNumberish
+    title: string,
+    price: BigNumberish
   ];
   export type OutputTuple = [
     jobId: bigint,
     client: string,
-    freelancer: string,
-    amount: bigint
+    title: string,
+    price: bigint
   ];
   export interface OutputObject {
     jobId: bigint;
     client: string;
-    freelancer: string;
-    amount: bigint;
+    title: string;
+    price: bigint;
   }
   export type Event = TypedContractEvent<InputTuple, OutputTuple, OutputObject>;
   export type Filter = TypedDeferredTopicFilter<Event>;
@@ -273,28 +403,47 @@ export interface AIEscrowMarketplace extends BaseContract {
     event?: TCEvent
   ): Promise<this>;
 
-  aiAgentAddress: TypedContractMethod<[], [string], "view">;
-
-  createJob: TypedContractMethod<
-    [
-      _freelancer: AddressLike,
-      _amount: BigNumberish,
-      _workDescriptionIPFSHash: string
-    ],
+  acceptBid: TypedContractMethod<
+    [_jobId: BigNumberish, _bidId: BigNumberish],
     [void],
     "nonpayable"
   >;
 
-  depositFunds: TypedContractMethod<[_jobId: BigNumberish], [void], "payable">;
+  aiAgentAddress: TypedContractMethod<[], [string], "view">;
+
+  bidsByJobId: TypedContractMethod<
+    [arg0: BigNumberish, arg1: BigNumberish],
+    [
+      [bigint, bigint, string, string] & {
+        bidId: bigint;
+        jobId: bigint;
+        freelancer: string;
+        proposalText: string;
+      }
+    ],
+    "view"
+  >;
+
+  depositForJob: TypedContractMethod<[_jobId: BigNumberish], [void], "payable">;
+
+  getBidsForJob: TypedContractMethod<
+    [_jobId: BigNumberish],
+    [AIEscrowMarketplace.BidStructOutput[]],
+    "view"
+  >;
+
+  getJobCount: TypedContractMethod<[], [bigint], "view">;
 
   jobs: TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [string, string, bigint, string, string, bigint] & {
+      [string, string, string, string, bigint, bigint, string, bigint] & {
         client: string;
         freelancer: string;
-        amount: bigint;
-        workDescriptionIPFSHash: string;
+        title: string;
+        descriptionIPFSHash: string;
+        price: bigint;
+        deadline: bigint;
         resultIPFSHash: string;
         status: bigint;
       }
@@ -302,14 +451,43 @@ export interface AIEscrowMarketplace extends BaseContract {
     "view"
   >;
 
+  jobsByClient: TypedContractMethod<
+    [arg0: AddressLike, arg1: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
+  jobsByFreelancer: TypedContractMethod<
+    [arg0: AddressLike, arg1: BigNumberish],
+    [bigint],
+    "view"
+  >;
+
   nextJobId: TypedContractMethod<[], [bigint], "view">;
 
   owner: TypedContractMethod<[], [string], "view">;
+
+  postJob: TypedContractMethod<
+    [
+      _title: string,
+      _descriptionIPFSHash: string,
+      _price: BigNumberish,
+      _deadline: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
 
   renounceOwnership: TypedContractMethod<[], [void], "nonpayable">;
 
   setAiAgentAddress: TypedContractMethod<
     [_newAiAgentAddress: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+
+  submitBid: TypedContractMethod<
+    [_jobId: BigNumberish, _proposalText: string],
     [void],
     "nonpayable"
   >;
@@ -337,36 +515,72 @@ export interface AIEscrowMarketplace extends BaseContract {
   ): T;
 
   getFunction(
-    nameOrSignature: "aiAgentAddress"
-  ): TypedContractMethod<[], [string], "view">;
-  getFunction(
-    nameOrSignature: "createJob"
+    nameOrSignature: "acceptBid"
   ): TypedContractMethod<
-    [
-      _freelancer: AddressLike,
-      _amount: BigNumberish,
-      _workDescriptionIPFSHash: string
-    ],
+    [_jobId: BigNumberish, _bidId: BigNumberish],
     [void],
     "nonpayable"
   >;
   getFunction(
-    nameOrSignature: "depositFunds"
+    nameOrSignature: "aiAgentAddress"
+  ): TypedContractMethod<[], [string], "view">;
+  getFunction(
+    nameOrSignature: "bidsByJobId"
+  ): TypedContractMethod<
+    [arg0: BigNumberish, arg1: BigNumberish],
+    [
+      [bigint, bigint, string, string] & {
+        bidId: bigint;
+        jobId: bigint;
+        freelancer: string;
+        proposalText: string;
+      }
+    ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "depositForJob"
   ): TypedContractMethod<[_jobId: BigNumberish], [void], "payable">;
+  getFunction(
+    nameOrSignature: "getBidsForJob"
+  ): TypedContractMethod<
+    [_jobId: BigNumberish],
+    [AIEscrowMarketplace.BidStructOutput[]],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "getJobCount"
+  ): TypedContractMethod<[], [bigint], "view">;
   getFunction(
     nameOrSignature: "jobs"
   ): TypedContractMethod<
     [arg0: BigNumberish],
     [
-      [string, string, bigint, string, string, bigint] & {
+      [string, string, string, string, bigint, bigint, string, bigint] & {
         client: string;
         freelancer: string;
-        amount: bigint;
-        workDescriptionIPFSHash: string;
+        title: string;
+        descriptionIPFSHash: string;
+        price: bigint;
+        deadline: bigint;
         resultIPFSHash: string;
         status: bigint;
       }
     ],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "jobsByClient"
+  ): TypedContractMethod<
+    [arg0: AddressLike, arg1: BigNumberish],
+    [bigint],
+    "view"
+  >;
+  getFunction(
+    nameOrSignature: "jobsByFreelancer"
+  ): TypedContractMethod<
+    [arg0: AddressLike, arg1: BigNumberish],
+    [bigint],
     "view"
   >;
   getFunction(
@@ -376,12 +590,31 @@ export interface AIEscrowMarketplace extends BaseContract {
     nameOrSignature: "owner"
   ): TypedContractMethod<[], [string], "view">;
   getFunction(
+    nameOrSignature: "postJob"
+  ): TypedContractMethod<
+    [
+      _title: string,
+      _descriptionIPFSHash: string,
+      _price: BigNumberish,
+      _deadline: BigNumberish
+    ],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
     nameOrSignature: "renounceOwnership"
   ): TypedContractMethod<[], [void], "nonpayable">;
   getFunction(
     nameOrSignature: "setAiAgentAddress"
   ): TypedContractMethod<
     [_newAiAgentAddress: AddressLike],
+    [void],
+    "nonpayable"
+  >;
+  getFunction(
+    nameOrSignature: "submitBid"
+  ): TypedContractMethod<
+    [_jobId: BigNumberish, _proposalText: string],
     [void],
     "nonpayable"
   >;
@@ -411,6 +644,20 @@ export interface AIEscrowMarketplace extends BaseContract {
     AiAgentAddressUpdatedEvent.OutputObject
   >;
   getEvent(
+    key: "BidAccepted"
+  ): TypedContractEvent<
+    BidAcceptedEvent.InputTuple,
+    BidAcceptedEvent.OutputTuple,
+    BidAcceptedEvent.OutputObject
+  >;
+  getEvent(
+    key: "BidSubmitted"
+  ): TypedContractEvent<
+    BidSubmittedEvent.InputTuple,
+    BidSubmittedEvent.OutputTuple,
+    BidSubmittedEvent.OutputObject
+  >;
+  getEvent(
     key: "FundsDeposited"
   ): TypedContractEvent<
     FundsDepositedEvent.InputTuple,
@@ -425,11 +672,11 @@ export interface AIEscrowMarketplace extends BaseContract {
     FundsReleasedEvent.OutputObject
   >;
   getEvent(
-    key: "JobCreated"
+    key: "JobPosted"
   ): TypedContractEvent<
-    JobCreatedEvent.InputTuple,
-    JobCreatedEvent.OutputTuple,
-    JobCreatedEvent.OutputObject
+    JobPostedEvent.InputTuple,
+    JobPostedEvent.OutputTuple,
+    JobPostedEvent.OutputObject
   >;
   getEvent(
     key: "OwnershipTransferred"
@@ -465,6 +712,28 @@ export interface AIEscrowMarketplace extends BaseContract {
       AiAgentAddressUpdatedEvent.OutputObject
     >;
 
+    "BidAccepted(uint256,uint256,address,address)": TypedContractEvent<
+      BidAcceptedEvent.InputTuple,
+      BidAcceptedEvent.OutputTuple,
+      BidAcceptedEvent.OutputObject
+    >;
+    BidAccepted: TypedContractEvent<
+      BidAcceptedEvent.InputTuple,
+      BidAcceptedEvent.OutputTuple,
+      BidAcceptedEvent.OutputObject
+    >;
+
+    "BidSubmitted(uint256,uint256,address,string)": TypedContractEvent<
+      BidSubmittedEvent.InputTuple,
+      BidSubmittedEvent.OutputTuple,
+      BidSubmittedEvent.OutputObject
+    >;
+    BidSubmitted: TypedContractEvent<
+      BidSubmittedEvent.InputTuple,
+      BidSubmittedEvent.OutputTuple,
+      BidSubmittedEvent.OutputObject
+    >;
+
     "FundsDeposited(uint256,uint256)": TypedContractEvent<
       FundsDepositedEvent.InputTuple,
       FundsDepositedEvent.OutputTuple,
@@ -487,15 +756,15 @@ export interface AIEscrowMarketplace extends BaseContract {
       FundsReleasedEvent.OutputObject
     >;
 
-    "JobCreated(uint256,address,address,uint256)": TypedContractEvent<
-      JobCreatedEvent.InputTuple,
-      JobCreatedEvent.OutputTuple,
-      JobCreatedEvent.OutputObject
+    "JobPosted(uint256,address,string,uint256)": TypedContractEvent<
+      JobPostedEvent.InputTuple,
+      JobPostedEvent.OutputTuple,
+      JobPostedEvent.OutputObject
     >;
-    JobCreated: TypedContractEvent<
-      JobCreatedEvent.InputTuple,
-      JobCreatedEvent.OutputTuple,
-      JobCreatedEvent.OutputObject
+    JobPosted: TypedContractEvent<
+      JobPostedEvent.InputTuple,
+      JobPostedEvent.OutputTuple,
+      JobPostedEvent.OutputObject
     >;
 
     "OwnershipTransferred(address,address)": TypedContractEvent<

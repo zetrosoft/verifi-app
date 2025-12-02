@@ -2,16 +2,28 @@ import pkg from 'hardhat';
 const { ethers } = pkg;
 
 async function main() {
-  const initialAiAgentAddress = "0x63F0028E2fE0Aa5c5fbb3ac7A270B5fefcC497FA";
+  // TODO: Replace with your actual AI Agent address for deployment
+  const initialAiAgentAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'; // Hardhat #0 address as placeholder
 
-  console.log("Deploying AIEscrowMarketplace contract...");
-  console.log(`The address for the AI Agent will be: ${initialAiAgentAddress}`);
-  
-  const escrow = await ethers.deployContract("AIEscrowMarketplace", [initialAiAgentAddress]);
+  if (initialAiAgentAddress === '0x0000000000000000000000000000000000000000') {
+    console.warn(
+      'WARNING: initialAiAgentAddress is a placeholder. Please update it in deploy.ts before production deployment.',
+    );
+  }
+
+  console.log('Deploying AIEscrowMarketplace contract (V2)...');
+  console.log(`Using AI Agent Address: ${initialAiAgentAddress}`);
+
+  const escrow = await ethers.deployContract('AIEscrowMarketplace', [initialAiAgentAddress]);
 
   await escrow.waitForDeployment();
 
   console.log(`AIEscrowMarketplace contract deployed to: ${escrow.target}`);
+  console.log('------------------------------------------------------------------');
+  console.log(
+    'Deployment complete! Make sure to update your frontend and AI agent configurations with this new contract address.',
+  );
+  console.log('------------------------------------------------------------------');
 }
 
 main().catch((error) => {

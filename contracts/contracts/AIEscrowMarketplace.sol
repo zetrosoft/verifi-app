@@ -20,34 +20,48 @@ contract AIEscrowMarketplace is Ownable, ReentrancyGuard {
     uint256 public nextJobId;
 
     enum Status {
-        Created,
-        FundsDeposited,
-        WorkSubmitted,
-        Verified,
-        Completed,
-        Cancelled // Untuk penanganan sengketa di masa depan
+        Open,           // Job posted, open for bidding
+        Assigned,       // Freelancer selected, awaiting deposit
+        FundsDeposited, // Client has deposited, work can begin
+        WorkSubmitted,  // Freelancer has submitted the work
+        Verified,       // AI Agent has completed verification
+        Completed,      // Funds have been released
+        Cancelled       // Cancelled
     }
 
     struct Job {
         address payable client;
-        address payable freelancer;
-        uint256 amount;
-        string workDescriptionIPFSHash;
+        address payable freelancer; // Will be set after a bid is accepted
+        string title;
+        string descriptionIPFSHash;
+        uint256 price;
+        uint256 deadline; // Unix timestamp
         string resultIPFSHash;
         Status status;
     }
 
+    struct Bid {
+        uint256 bidId;
+        uint256 jobId;
+        address payable freelancer;
+        string proposalText;
+    }
+
     mapping(uint256 => Job) public jobs;
+    mapping(uint256 => Bid[]) public bidsByJobId;
+    mapping(address => uint256[]) public jobsByFreelancer;
+    mapping(address => uint256[]) public jobsByClient;
+
 
     // =================================================================
     // Events
     // =================================================================
 
-    event JobCreated(uint256 indexed jobId, address indexed client, address indexed freelancer, uint256 amount);
-    event FundsDeposited(uint256 indexed jobId, uint256 amount);
+    event JobPosted(uint256 indexed jobId, address indexed client, string title, uint256 price);
+    event FundsDeposited(uint256 indexed jobId, uint256 price);
     event WorkSubmitted(uint256 indexed jobId, address indexed freelancer, string resultIPFSHash);
     event WorkVerified(uint256 indexed jobId, bool isApproved);
-    event FundsReleased(uint256 indexed jobId, address indexed recipient, uint256 amount);
+    event FundsReleased(uint256 indexed jobId, address indexed recipient, uint256 price);
     event AiAgentAddressUpdated(address indexed newAddress);
 
     // =================================================================
@@ -96,31 +110,90 @@ contract AIEscrowMarketplace is Ownable, ReentrancyGuard {
     // Core Functions
     // =================================================================
 
-    function createJob(address payable _freelancer, uint256 _amount, string memory _workDescriptionIPFSHash) external {
-        require(_freelancer != address(0), "AIEscrow: Invalid freelancer address");
-        require(_amount > 0, "AIEscrow: Amount must be greater than zero");
-        require(bytes(_workDescriptionIPFSHash).length > 0, "AIEscrow: Work description IPFS hash cannot be empty");
+    function postJob(
+        string memory _title,
+        string memory _descriptionIPFSHash,
+        uint256 _price,
+        uint256 _deadline
+    ) external {
+        require(bytes(_title).length > 0, "AIEscrow: Job title cannot be empty");
+        require(bytes(_descriptionIPFSHash).length > 0, "AIEscrow: Work description IPFS hash cannot be empty");
+        require(_price > 0, "AIEscrow: Price must be greater than zero");
+        require(_deadline > block.timestamp, "AIEscrow: Deadline must be in the future");
 
         uint256 jobId = nextJobId;
         jobs[jobId] = Job({
             client: payable(msg.sender),
-            freelancer: _freelancer,
-            amount: _amount,
-            workDescriptionIPFSHash: _workDescriptionIPFSHash,
+            freelancer: payable(address(0)), // Freelancer is not assigned yet
+            title: _title,
+            descriptionIPFSHash: _descriptionIPFSHash,
+            price: _price,
+            deadline: _deadline,
             resultIPFSHash: "",
-            status: Status.Created
+            status: Status.Open
         });
 
+        jobsByClient[msg.sender].push(jobId);
         nextJobId++;
-        emit JobCreated(jobId, msg.sender, _freelancer, _amount);
+
+        emit JobPosted(jobId, msg.sender, _title, _price);
     }
 
-    function depositFunds(uint256 _jobId) external payable nonReentrant onlyJobClient(_jobId) atJobStatus(_jobId, Status.Created) {
+    event BidSubmitted(uint256 indexed jobId, uint256 indexed bidId, address indexed freelancer, string proposalText);
+
+    function submitBid(uint256 _jobId, string memory _proposalText) external {
         Job storage job = jobs[_jobId];
-        require(msg.value == job.amount, "AIEscrow: Incorrect deposit amount");
+        require(job.client != address(0), "AIEscrow: Job does not exist");
+        require(job.status == Status.Open, "AIEscrow: Job is not open for bidding");
+        require(bytes(_proposalText).length > 0, "AIEscrow: Proposal text cannot be empty");
+        require(msg.sender != job.client, "AIEscrow: Client cannot submit a bid on their own job");
+
+        uint256 bidId = bidsByJobId[_jobId].length; // Simple auto-incrementing bid ID per job
+        bidsByJobId[_jobId].push(
+            Bid({
+                bidId: bidId,
+                jobId: _jobId,
+                freelancer: payable(msg.sender),
+                proposalText: _proposalText
+            })
+        );
+
+        emit BidSubmitted(_jobId, bidId, msg.sender, _proposalText);
+    }
+
+    event BidAccepted(uint256 indexed jobId, uint256 indexed bidId, address client, address freelancer);
+
+    function acceptBid(uint256 _jobId, uint256 _bidId) external onlyJobClient(_jobId) {
+        Job storage job = jobs[_jobId];
+        require(job.status == Status.Open, "AIEscrow: Job is not open for bidding");
+        require(_bidId < bidsByJobId[_jobId].length, "AIEscrow: Invalid bid ID");
+
+        Bid storage acceptedBid = bidsByJobId[_jobId][_bidId];
+        job.freelancer = acceptedBid.freelancer;
+        job.status = Status.Assigned;
+
+        jobsByFreelancer[acceptedBid.freelancer].push(_jobId);
+
+        emit BidAccepted(_jobId, _bidId, msg.sender, acceptedBid.freelancer);
+    }
+
+    function getBidsForJob(uint256 _jobId) external view returns (Bid[] memory) {
+        require(jobs[_jobId].client != address(0), "AIEscrow: Job does not exist");
+        return bidsByJobId[_jobId];
+    }
+
+    function getJobCount() external view returns (uint256) {
+        return nextJobId;
+    }
+
+
+
+    function depositForJob(uint256 _jobId) external payable nonReentrant onlyJobClient(_jobId) atJobStatus(_jobId, Status.Assigned) {
+        Job storage job = jobs[_jobId];
+        require(msg.value == job.price, "AIEscrow: Incorrect deposit amount"); // Now checking against job.price
 
         job.status = Status.FundsDeposited;
-        emit FundsDeposited(_jobId, msg.value);
+        emit FundsDeposited(_jobId, msg.value); // msg.value is the actual amount received
     }
 
     function submitWork(uint256 _jobId, string memory _resultIPFSHash) external onlyJobFreelancer(_jobId) atJobStatus(_jobId, Status.FundsDeposited) {
@@ -156,9 +229,9 @@ contract AIEscrowMarketplace is Ownable, ReentrancyGuard {
         require(job.status == Status.Verified, "AIEscrow: Job not in verified status for fund release");
 
         job.status = Status.Completed;
-        (bool success, ) = job.freelancer.call{value: job.amount}("");
+        (bool success, ) = job.freelancer.call{value: job.price}("");
         require(success, "AIEscrow: Failed to release funds to freelancer");
 
-        emit FundsReleased(_jobId, job.freelancer, job.amount);
+        emit FundsReleased(_jobId, job.freelancer, job.price);
     }
 }
