@@ -1,73 +1,65 @@
-# Laporan Pengujian Kontrak AIEscrowMarketplace (Verifi-app)
+# Testing Report for AIEscrowMarketplace Contract (Verifi-app)
 
-**Tanggal:** 2025-12-03
+**Date:** 2025-12-03
 
-## Ringkasan Eksekutif
+## Executive Summary
 
-Pengujian ekstensif telah dilakukan pada kontrak pintar `AIEscrowMarketplace` yang terletak di `verifi-app/contracts`. Semua 23 kasus uji yang ditentukan telah berhasil lulus, mengkonfirmasi fungsionalitas inti kontrak dalam lingkungan Hardhat Network yang di-fork dari Avalanche Fuji Testnet.
+Extensive testing has been performed on the `AIEscrowMarketplace` smart contract located in `verifi-app/contracts`. All 23 specified test cases have successfully passed, confirming the core functionality of the contract within a Hardhat Network environment forked from the Avalanche Fuji Testnet.
 
-## Tujuan Pengujian
+## Testing Objectives
 
-Tujuan utama pengujian ini adalah untuk memverifikasi perilaku yang benar dari kontrak `AIEscrowMarketplace` di bawah berbagai skenario, termasuk:
-- Posting pekerjaan baru oleh klien.
-- Pengajuan bid oleh freelancer.
-- Penerimaan bid oleh klien.
-- Deposit dana ke dalam escrow.
-- Pengajuan pekerjaan oleh freelancer.
-- Verifikasi pekerjaan oleh AI Agent (dengan persetujuan dan penolakan).
-- Penanganan status pekerjaan yang berbeda.
-- Penanganan kondisi revert yang diharapkan (misalnya, harga nol, deadline di masa lalu, deposit yang salah).
+The primary objective of this testing was to verify the correct behavior of the `AIEscrowMarketplace` contract under various scenarios, including:
+- Posting new jobs by clients.
+- Submitting bids by freelancers.
+- Accepting bids by clients.
+- Depositing funds into escrow.
+- Submitting work by freelancers.
+- Verifying work by the AI Agent (with approval and rejection).
+- Handling different job statuses.
+- Handling expected revert conditions (e.g., zero price, past deadline, incorrect deposit).
 
-## Hasil Pengujian
+## Testing Results
 
-**Semua 23 tes berhasil lulus.** Ini menunjukkan bahwa kontrak `AIEscrowMarketplace` berfungsi sesuai spesifikasi dan berinteraksi dengan Hardhat Network yang di-fork dari Fuji Testnet seperti yang diharapkan.
+**All 23 tests passed successfully.** This indicates that the `AIEscrowMarketplace` contract functions according to specifications and interacts with the Hardhat Network forked from the Fuji Testnet as expected.
 
 ```
   23 passing (31s)
 ```
 
-## Lingkungan Pengujian
+## Testing Environment
 
--   **Kontrak:** `AIEscrowMarketplace.sol`
--   **Rangka Kerja Pengujian:** Hardhat (dengan plugin `@nomicfoundation/hardhat-toolbox`)
--   **Bahasa Pengujian:** TypeScript
--   **Jaringan:** Hardhat Network yang di-fork dari Avalanche Fuji Testnet (RPC Ankr)
--   **Node.js:** v20.19.4 (meskipun Hardhat mengeluarkan peringatan untuk v18.20.8 yang tidak didukung, pengujian berhasil dilakukan)
+-   **Contract:** `AIEscrowMarketplace.sol`
+-   **Testing Framework:** Hardhat (with `@nomicfoundation/hardhat-toolbox` plugin)
+-   **Testing Language:** TypeScript
+-   **Network:** Hardhat Network forked from Avalanche Fuji Testnet (Ankr RPC)
+-   **Node.js:** v20.19.4 (although Hardhat issued a warning for unsupported v18.20.8, testing was successfully conducted)
 
-## Tantangan dan Solusi Utama Selama Penyiapan & Pengujian
+## Key Challenges and Solutions During Setup & Testing
 
-Selama proses penyiapan dan pengujian, beberapa tantangan teknis signifikan diatasi:
+During the setup and testing process, several significant technical challenges were addressed:
 
-1.  **Konfigurasi Forking Hardhat:** Konfigurasi Hardhat untuk forking Avalanche Fuji Testnet adalah tugas yang paling menantang, membutuhkan beberapa iterasi.
-    *   Awalnya, node Hardhat gagal mem-fork, secara diam-diam kembali ke jaringan Hardhat default dengan simbol `ETH` dan bukan `AVAX`.
-    *   Diperbaiki dengan penempatan konfigurasi `networks.hardhat` yang benar di `hardhat.config.cts` dan memastikan `FUJI_RPC_URL` (dari Ankr) dapat diakses.
-    *   Pentingnya memeriksa `Nomor Blok Saat Ini` melalui skrip diagnostik digunakan untuk mengkonfirmasi keberhasilan forking, karena tampilan `10000 ETH` dalam output `npx hardhat node` terbukti menyesatkan.
+1.  **Hardhat Forking Configuration:** Configuring Hardhat for forking the Avalanche Fuji Testnet was the most challenging task, requiring several iterations.
+    *   Initially, the Hardhat node failed to fork, silently reverting to the default Hardhat network with an `ETH` symbol instead of `AVAX`.
+    *   Resolved by correctly placing the `networks.hardhat` configuration in `hardhat.config.cts` and ensuring `FUJI_RPC_URL` (from Ankr) was accessible.
+    *   The importance of checking the `Current Block Number` via a diagnostic script was used to confirm successful forking, as the `10000 ETH` display in the `npx hardhat node` output proved misleading.
 
-2.  **Kompatibilitas TypeScript/Ethers v6:** Migrasi dari Ethers v5 ke v6 memperkenalkan perubahan tipe data yang signifikan.
-    *   Masalah utama adalah penanganan tipe `bigint` (untuk nilai `uint256` dari kontrak) versus `number` (untuk literal JavaScript dan variabel `number` lama).
-    *   Semua perbandingan dan penugasan yang melibatkan nilai kontrak diubah untuk menggunakan literal `bigint` (`0n`, `1n`, dll.) atau variabel `bigint`.
-    *   Perbaikan juga dilakukan pada cara mengakses data dari Typechain yang dihasilkan (`getBidsForJob` versus mengakses mapping secara langsung) dan casting yang tepat untuk instance kontrak yang di-deploy (`as AIEscrowMarketplace`).
+2.  **TypeScript/Ethers v6 Compatibility:** Migration from Ethers v5 to v6 introduced significant data type changes.
+    *   The main issue was handling `bigint` types (for `uint256` values from contracts) versus `number` (for JavaScript literals and old `number` variables).
+    *   All comparisons and assignments involving contract values were modified to use `bigint` literals (`0n`, `1n`, etc.) or `bigint` variables.
+    *   Fixes were also applied to correctly access data from generated Typechain (`getBidsForJob` versus directly accessing mappings) and proper casting for deployed contract instances (`as AIEscrowMarketplace`).
 
-3.  **Resolusi Modul Node.js ES (ERR_UNKNOWN_FILE_EXTENSION & ERR_UNSUPPORTED_DIR_IMPORT):**
-    *   Proyek ini menggunakan `"type": "module"` di `package.json`, yang menyebabkan masalah bagi `ts-node/esm` saat mencoba memuat file TypeScript (`.ts`) atau modul Typechain yang dihasilkan.
-    *   Error `TypeError: Unknown file extension ".ts"` dan `Error: ERR_UNSUPPORTED_DIR_IMPORT` diatasi dengan:
-        *   Menggunakan `NODE_OPTIONS="--loader ts-node/esm"` saat menjalankan Hardhat test/run.
-        *   Memastikan `tsconfig.json` dikonfigurasi dengan benar (`NodeNext`, `baseUrl`, `paths`).
-        *   Menyesuaikan statement impor Typechain agar menunjuk ke file (`../typechain-types/contracts/AIEscrowMarketplace.js`) daripada direktori, sesuai dengan aturan resolusi ESM yang ketat.
+3.  **Node.js ES Module Resolution (ERR_UNKNOWN_FILE_EXTENSION & ERR_UNSUPPORTED_DIR_IMPORT):**
+    *   The project uses `"type": "module"` in `package.json`, which caused issues for `ts-node/esm` when trying to load TypeScript (`.ts`) files or generated Typechain modules.
+    *   `TypeError: Unknown file extension ".ts"` and `Error: ERR_UNSUPPORTED_DIR_IMPORT` were resolved by:
+        *   Using `NODE_OPTIONS="--loader ts-node/esm"` when running Hardhat test/run.
+        *   Ensuring `tsconfig.json` was correctly configured (`NodeNext`, `baseUrl`, `paths`).
+        *   Adjusting Typechain import statements to point to specific files (`../typechain-types/contracts/AIEscrowMarketplace.js`) rather than directories, according to strict ESM resolution rules.
 
-4.  **Perbaikan Logika Tes Spesifik:**
-    *   Kesalahan `TypeError: Cannot define property status, object is not extensible` diatasi dengan merestrukturisasi tes agar tidak mencoba memodifikasi objek `immutable` yang dikembalikan dari view function kontrak.
-    *   Kesalahan `AssertionError` yang disebabkan oleh pergeseran nilai enum `Status` di kontrak setelah penambahan status baru diperbaiki dengan memperbarui nilai yang diharapkan dalam tes.
-    *   Perhitungan deadline di masa lalu disesuaikan agar lebih andal di lingkungan Hardhat.
+4.  **Specific Test Logic Fixes:**
+    *   `TypeError: Cannot define property status, object is not extensible` was resolved by restructuring the test to avoid attempting to modify immutable objects returned from contract view functions.
+    *   `AssertionError` caused by a shift in `Status` enum values in the contract (after adding new statuses) was corrected by updating the expected values in the tests.
+    *   The calculation of past deadlines was adjusted to be more reliable in the Hardhat environment.
 
-## Kesimpulan
+## Conclusion
 
-Kontrak `AIEscrowMarketplace` sekarang sepenuhnya teruji dan berfungsi sesuai harapan di lingkungan Hardhat yang di-fork dari Avalanche Fuji Testnet. Tantangan utama terletak pada penyesuaian konfigurasi Hardhat dan penulisan tes agar kompatibel sepenuhnya dengan TypeScript, Ethers v6, dan persyaratan resolusi modul Node.js ES yang ketat.
-
-`# Laporan Pengujian Kontrak AIEscrowMarketplace (Verifi-app)`
-`## Ringkasan Eksekutif`
-`## Tujuan Pengujian`
-`## Hasil Pengujian`
-`## Lingkungan Pengujian`
-`## Tantangan dan Solusi Utama Selama Penyiapan & Pengujian`
-`## Kesimpulan`
+The `AIEscrowMarketplace` contract is now fully tested and functions as expected in the Hardhat environment forked from the Avalanche Fuji Testnet. The main challenges lay in adapting Hardhat's configuration and test writing to be fully compatible with TypeScript, Ethers v6, and strict Node.js ES module resolution requirements.
