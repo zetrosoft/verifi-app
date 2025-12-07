@@ -1,121 +1,109 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { ethers } from 'ethers';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useWeb3 } from '../../contexts/Web3Context';
-import AIEscrowMarketplaceArtifact from '../../artifacts/AIEscrowMarketplace.json';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Loader2, ArrowLeft } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 interface Bid {
-  bidId: number;
-  jobId: number;
-  freelancer: string;
-  proposalText: string;
+    bidId: number;
+    freelancer: string;
+    proposalText: string;
 }
 
-interface ViewBidsProps {
-  jobId: number | null;
-  onBack: () => void;
-  onBidAccepted: () => void; // Callback to refresh job lists after bid acceptance
-}
+const ViewBidsPage: React.FC = () => {
+    const { jobId: jobIdParam } = useParams<{ jobId: string }>();
+    const jobId = jobIdParam ? parseInt(jobIdParam, 10) : null;
+    const navigate = useNavigate();
+    
+    const { provider, contract } = useWeb3();
+    const [bids, setBids] = useState<Bid[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [actionState, setActionState] = useState<{ [key: number]: boolean }>({});
 
-const ViewBids: React.FC<ViewBidsProps> = ({ jobId, onBack, onBidAccepted }) => {
-  const { provider, signer, account } = useWeb3();
-  const [bids, setBids] = useState<Bid[]>([]);
-  const [jobTitle, setJobTitle] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [acceptingBid, setAcceptingBid] = useState<number | null>(null);
+    const fetchBidsForJob = useCallback(async () => {
+        if (!provider || !contract || jobId === null) return;
 
-  const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS || 'YOUR_CONTRACT_ADDRESS';
+        setLoading(true);
+        setError(null);
+        try {
+            const allBidsData = await contract.getBidsForJob(jobId);
+            const formattedBids: Bid[] = allBidsData.map((bid: any, index: number) => ({
+                bidId: index,
+                freelancer: bid.freelancer,
+                proposalText: bid.proposalText,
+            }));
+            setBids(formattedBids);
+        } catch (err: any) {
+            console.error('Error fetching bids:', err);
+            setError(err.reason || err.message || 'Failed to fetch bids for this job.');
+        } finally {
+            setLoading(false);
+        }
+    }, [provider, contract, jobId]);
 
-  const fetchBids = useCallback(async () => {
-    if (!jobId || !provider) {
-      setLoading(false);
-      return;
-    }
+    useEffect(() => {
+        fetchBidsForJob();
+    }, [fetchBidsForJob]);
 
-    setLoading(true);
-    setError(null);
-    try {
-      const contract = new ethers.Contract(contractAddress, AIEscrowMarketplaceArtifact.abi, provider);
-      const fetchedBids: Bid[] = [];
-      const jobData = await contract.jobs(jobId);
-      setJobTitle(jobData.title);
+    const handleAcceptBid = async (bidId: number) => {
+        if (!contract || jobId === null) return;
 
-      const contractBids = await contract.bidsByJobId(jobId);
-      for (let i = 0; i < contractBids.length; i++) {
-        const bid = contractBids[i];
-        fetchedBids.push({
-          bidId: bid.bidId,
-          jobId: bid.jobId,
-          freelancer: bid.freelancer,
-          proposalText: bid.proposalText,
-        });
-      }
-      setBids(fetchedBids);
-    } catch (err: any) {
-      console.error('Error fetching bids:', err);
-      setError(err.reason || err.message || 'Failed to fetch bids.');
-    } finally {
-      setLoading(false);
-    }
-  }, [jobId, provider, contractAddress]);
+        setActionState(prev => ({ ...prev, [bidId]: true }));
+        try {
+            const tx = await contract.acceptBid(jobId, bidId);
+            await tx.wait();
+            navigate('/client-dashboard/my-jobs'); // Redirect after accepting
+        } catch (error: any) {
+            console.error("Failed to accept bid:", error);
+            setError(error.reason || "Failed to accept bid. The transaction may have been reverted.");
+        } finally {
+            setActionState(prev => ({ ...prev, [bidId]: false }));
+        }
+    };
 
-  useEffect(() => {
-    fetchBids();
-  }, [fetchBids]);
-
-  const handleAcceptBid = async (bidId: number) => {
-    if (!signer || !account || jobId === null) {
-      setError('Wallet not connected or job not selected.');
-      return;
-    }
-
-    setAcceptingBid(bidId);
-    setError(null);
-    try {
-      const contract = new ethers.Contract(contractAddress, AIEscrowMarketplaceArtifact.abi, signer);
-      const tx = await contract.acceptBid(jobId, bidId);
-      await tx.wait();
-      onBidAccepted(); // Callback to refresh relevant components
-      onBack(); // Go back to job list
-    } catch (err: any) {
-      console.error('Error accepting bid:', err);
-      setError(err.reason || err.message || 'Failed to accept bid.');
-    } finally {
-      setAcceptingBid(null);
-    }
-  };
-
-  if (!jobId) return <div className="p-4">Select a job to view bids.</div>;
-  if (loading) return <div className="p-4">Loading bids...</div>;
-  if (error) return <div className="p-4 text-red-500">Error: {error}</div>;
-
-  return (
-    <div className="p-4">
-      <button onClick={onBack} className="mb-4 px-4 py-2 bg-gray-300 rounded-md hover:bg-gray-400">
-        &larr; Back to My Jobs
-      </button>
-      <h2 className="text-xl font-bold mb-4">Bids for "{jobTitle}" (Job ID: {jobId})</h2>
-      {bids.length === 0 ? (
-        <p>No bids yet for this job.</p>
-      ) : (
-        <div className="space-y-4">
-          {bids.map((bid) => (
-            <div key={bid.bidId} className="border rounded-lg p-4 shadow-sm">
-              <h3 className="text-lg font-semibold">Freelancer: {bid.freelancer.substring(0, 8)}...</h3>
-              <p><strong>Proposal:</strong> {bid.proposalText}</p>
-              <button
-                onClick={() => handleAcceptBid(bid.bidId)}
-                className="mt-2 px-4 py-2 bg-green-500 text-white font-semibold rounded-md hover:bg-green-600 disabled:opacity-50"
-                disabled={acceptingBid === bid.bidId}
-              >
-                {acceptingBid === bid.bidId ? 'Accepting...' : 'Accept Bid'}
-              </button>
+    if (loading) return <div className="flex justify-center items-center p-4"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+    if (error) return <Alert variant="destructive" className="m-4"><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>;
+    
+    return (
+        <div className="p-4">
+            <div className="flex items-center gap-4 mb-4">
+                <Button onClick={() => navigate('/client-dashboard/bids')} variant="outline" size="icon">
+                    <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <h2 className="text-2xl font-bold">Bids for Job #{jobId}</h2>
             </div>
-          ))}
+            
+            {bids.length === 0 ? (
+                <p className="text-center text-muted-foreground">No bids have been placed for this job yet.</p>
+            ) : (
+                <div className="space-y-4">
+                    {bids.map((bid) => (
+                        <Card key={bid.freelancer}>
+                            <CardHeader>
+                                <CardTitle>Bid from: {bid.freelancer.substring(0, 6)}...{bid.freelancer.substring(bid.freelancer.length - 4)}</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-sm text-muted-foreground italic mb-4">"{bid.proposalText}"</p>
+                                <Separator />
+                                <div className="flex justify-end mt-4">
+                                    <Button
+                                        onClick={() => handleAcceptBid(bid.bidId)}
+                                        disabled={actionState[bid.bidId]}
+                                    >
+                                        {actionState[bid.bidId] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Accept This Bid"}
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
 };
 
-export default ViewBids;
+export default ViewBidsPage;

@@ -1,29 +1,32 @@
-import pkg from 'hardhat';
-const { ethers } = pkg;
+import { ethers } from "hardhat";
 
 async function main() {
-  // TODO: Replace with your actual AI Agent address for deployment
-  const initialAiAgentAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'; // Hardhat #0 address as placeholder
+  // Load environment variables
+  const initialAiAgentAddress = process.env.AI_AGENT_ADDRESS;
+  const initialAiAgentFeeWallet = process.env.AI_AGENT_FEE_WALLET;
 
-  if (initialAiAgentAddress === '0x0000000000000000000000000000000000000000') {
-    console.warn(
-      'WARNING: initialAiAgentAddress is a placeholder. Please update it in deploy.ts before production deployment.',
-    );
+  // Basic validation
+  if (!initialAiAgentAddress) {
+    throw new Error("AI_AGENT_ADDRESS is not set in your .env file.");
   }
-
-  console.log('Deploying AIEscrowMarketplace contract (V2)...');
+  if (!initialAiAgentFeeWallet) {
+    throw new Error("AI_AGENT_FEE_WALLET is not set in your .env file.");
+  }
+  
+  console.log('Deploying AIEscrowMarketplace contract...');
   console.log(`Using AI Agent Address: ${initialAiAgentAddress}`);
+  console.log(`Using AI Agent Fee Wallet Address: ${initialAiAgentFeeWallet}`);
 
-  const escrow = await ethers.deployContract('AIEscrowMarketplace', [initialAiAgentAddress]);
+  const AIEscrowMarketplace = await ethers.getContractFactory('AIEscrowMarketplace');
+  const escrow = await AIEscrowMarketplace.deploy(initialAiAgentAddress, initialAiAgentFeeWallet);
 
   await escrow.waitForDeployment();
 
   console.log(`AIEscrowMarketplace contract deployed to: ${escrow.target}`);
   console.log('------------------------------------------------------------------');
   console.log(
-    'Deployment complete! Make sure to update your frontend and AI agent configurations with this new contract address.',
+    'Deployment complete! Update your frontend and AI agent .env files with this new contract address.'
   );
-  console.log('------------------------------------------------------------------');
 }
 
 main().catch((error) => {

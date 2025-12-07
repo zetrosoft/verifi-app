@@ -1,132 +1,89 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { ethers } from 'ethers';
+import React, { useState, useEffect } from 'react';
 import { useWeb3 } from '../../contexts/Web3Context';
-import AIEscrowMarketplaceArtifact from '../../artifacts/AIEscrowMarketplace.json';
-
-interface JobDetail {
-  title: string;
-  price: string;
-  deadline: string;
-  descriptionIPFSHash: string;
-}
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 interface JobDetailModalProps {
   jobId: number | null;
-  onClose: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onBidSubmitted: () => void;
 }
 
-const JobDetailModal: React.FC<JobDetailModalProps> = ({ jobId, onClose, onBidSubmitted }) => {
-  const { provider, signer, account } = useWeb3();
-  const [jobDetail, setJobDetail] = useState<JobDetail | null>(null);
+const JobDetailModal: React.FC<JobDetailModalProps> = ({ jobId, open, onOpenChange, onBidSubmitted }) => {
+  const { contract } = useWeb3();
   const [proposal, setProposal] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS || 'YOUR_CONTRACT_ADDRESS';
-
-  const fetchJobDetails = useCallback(async () => {
-    console.log('[DEBUG JobDetailModal] Fetching details for jobId:', jobId);
-    if (jobId === null || !provider) { // Changed !jobId to jobId === null
-      setLoading(false);
-      console.warn('[DEBUG JobDetailModal] No jobId or provider, aborting fetch.');
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const contract = new ethers.Contract(contractAddress, AIEscrowMarketplaceArtifact.abi, provider);
-      const jobData = await contract.jobs(jobId);
-      console.log('[DEBUG JobDetailModal] Fetched jobData:', jobData);
-      setJobDetail({
-        title: jobData.title,
-        price: ethers.formatEther(jobData.price),
-        deadline: new Date(Number(jobData.deadline) * 1000).toLocaleString(),
-        descriptionIPFSHash: jobData.descriptionIPFSHash,
-      });
-    } catch (err: any) {
-      console.error('[DEBUG JobDetailModal] Error fetching job details:', err);
-      setError(err.reason || err.message || 'Failed to fetch job details.');
-    } finally {
-      setLoading(false);
-    }
-  }, [jobId, provider, contractAddress]);
-
+  
+  // Reset state when modal is closed or jobId changes
   useEffect(() => {
-    if (jobId !== null) { // Only fetch if jobId is provided
-      fetchJobDetails();
+    if (!open) {
+      setProposal('');
+      setError(null);
+      setIsSubmitting(false);
     }
-  }, [fetchJobDetails, jobId]); // Add jobId to dependency array
+  }, [open]);
 
-  const handleSubmitBid = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!signer || !account || jobId === null) {
-      setError('Please connect your wallet to submit a bid.');
+  const handleSubmitBid = async () => {
+    if (!contract || jobId === null || !proposal) {
+      setError('Proposal text is required.');
       return;
     }
-
-    setSubmitting(true);
+    setIsSubmitting(true);
     setError(null);
     try {
-      const contract = new ethers.Contract(contractAddress, AIEscrowMarketplaceArtifact.abi, signer);
       const tx = await contract.submitBid(jobId, proposal);
       await tx.wait();
-      onBidSubmitted();
-      onClose();
+      onBidSubmitted(); // Callback to refresh parent
+      onOpenChange(false); // Close modal
     } catch (err: any) {
-      console.error('[DEBUG JobDetailModal] Error submitting bid:', err);
-      setError(err.reason || err.message || 'Failed to submit bid.');
+      console.error("Failed to submit bid:", err);
+      setError(err.reason || err.message || "An error occurred while submitting the bid.");
     } finally {
-      setSubmitting(false);
+      setIsSubmitting(false);
     }
   };
 
-  if (jobId === null) return null; // Render nothing if no jobId
-
   return (
-    <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex justify-center items-center"> {/* Added z-50 */}
-      <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full relative"> {/* Added relative for potential close button positioning */}
-        {loading ? (
-          <p>Loading details...</p>
-        ) : error ? (
-          <>
-            <p className="text-red-500 mb-4">{error}</p>
-            <button onClick={onClose} className="px-4 py-2 bg-gray-300 rounded-md">Close</button>
-          </>
-        ) : jobDetail ? (
-          <>
-            <h2 className="text-2xl font-bold mb-4">{jobDetail.title}</h2>
-            <p><strong>Price:</strong> {jobDetail.price} ETH</p>
-            <p><strong>Deadline:</strong> {jobDetail.deadline}</p>
-            <p><strong>Description Hash:</strong> {jobDetail.descriptionIPFSHash}</p>
-            <hr className="my-4"/>
-            <form onSubmit={handleSubmitBid}>
-              <h3 className="text-lg font-semibold mb-2">Submit Your Bid</h3>
-              <textarea
-                className="w-full border p-2 rounded-md"
-                rows={4}
-                placeholder="Write your proposal here..."
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Submit Bid for Job #{jobId}</DialogTitle>
+          <DialogDescription>
+            Write a compelling proposal to win this job.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="grid w-full gap-1.5">
+            <Label htmlFor="proposal">Your Proposal</Label>
+            <Textarea 
+                id="proposal"
+                placeholder="Explain why you are the best fit for this job..." 
                 value={proposal}
                 onChange={(e) => setProposal(e.target.value)}
-                required
-              />
-              <div className="mt-4 flex justify-end space-x-2">
-                <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-300 rounded-md">Cancel</button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md disabled:opacity-50"
-                >
-                  {submitting ? 'Submitting...' : 'Submit Bid'}
-                </button>
-              </div>
-            </form>
-          </>
-        ) : null}
-      </div>
-    </div>
+                rows={5}
+            />
+          </div>
+          {error && (
+            <Alert variant="destructive">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+        <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Cancel</Button>
+            <Button onClick={handleSubmitBid} disabled={isSubmitting}>
+                {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</> : 'Submit Bid'}
+            </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

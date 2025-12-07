@@ -2,11 +2,11 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/Users/user/Kerjaan/Hackathon/verifi-app/contracts/contracts/AIEscrowMarketplace.sol": {
-      "lastModificationDate": 1764590853408,
-      "contentHash": "30d3a6fc14624bdb707cec921d43cf9a",
+      "lastModificationDate": 1765087218261,
+      "contentHash": "d1b77ba82bbffb6beebf5da143fadcc5",
       "sourceName": "contracts/AIEscrowMarketplace.sol",
       "solcConfig": {
-        "version": "0.8.24",
+        "version": "0.8.20",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {
@@ -41,11 +41,11 @@
       ]
     },
     "/Users/user/Kerjaan/Hackathon/verifi-app/contracts/node_modules/@openzeppelin/contracts/access/Ownable.sol": {
-      "lastModificationDate": 1763544152249,
+      "lastModificationDate": 1764898570283,
       "contentHash": "d3c790edc9ccf808a17c5a6cd13614fd",
       "sourceName": "@openzeppelin/contracts/access/Ownable.sol",
       "solcConfig": {
-        "version": "0.8.24",
+        "version": "0.8.20",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {
@@ -79,11 +79,11 @@
       ]
     },
     "/Users/user/Kerjaan/Hackathon/verifi-app/contracts/node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol": {
-      "lastModificationDate": 1763544152256,
+      "lastModificationDate": 1764898570289,
       "contentHash": "190613e556d509d9e9a0ea43dc5d891d",
       "sourceName": "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
       "solcConfig": {
-        "version": "0.8.24",
+        "version": "0.8.20",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {
@@ -115,11 +115,11 @@
       ]
     },
     "/Users/user/Kerjaan/Hackathon/verifi-app/contracts/node_modules/@openzeppelin/contracts/utils/Context.sol": {
-      "lastModificationDate": 1763544152055,
+      "lastModificationDate": 1764898570143,
       "contentHash": "67bfbc07588eb8683b3fd8f6f909563e",
       "sourceName": "@openzeppelin/contracts/utils/Context.sol",
       "solcConfig": {
-        "version": "0.8.24",
+        "version": "0.8.20",
         "settings": {
           "evmVersion": "paris",
           "optimizer": {

@@ -65,3 +65,36 @@ export const uploadFileToIPFS = async (fileData: File | string, fileName?: strin
     return null;
   }
 };
+
+/**
+ * @function getFileContentFromIPFS
+ * @description Mengambil konten file dari IPFS sebagai teks.
+ * @param {string} ipfsHash Hash IPFS (CID) dari konten yang akan diambil.
+ * @returns {Promise<string | null>} Konten file sebagai string, atau null jika gagal.
+ */
+export const getFileContentFromIPFS = async (ipfsHash: string): Promise<string | null> => {
+    if (!IPFS_API_URL) {
+        console.error("IPFS API URL tidak dikonfigurasi. Gagal mengambil dari IPFS.");
+        return null;
+    }
+
+    const url = `${IPFS_API_URL}/api/v0/cat?arg=${ipfsHash}`;
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Gagal mengambil dari IPFS: ${response.status} ${response.statusText}`, errorText);
+            return null;
+        }
+
+        const textContent = await response.text();
+        return textContent;
+    } catch (error) {
+        console.error("Kesalahan saat koneksi atau mengambil dari IPFS:", error);
+        return null;
+    }
+};

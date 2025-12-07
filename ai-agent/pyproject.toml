@@ -1,0 +1,19 @@
+[project]
+name = "ai-agent"
+version = "0.1.0"
+description = "AI Agent for Verifi Escrow Marketplace"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-dotenv",
+    "web3",
+    "ipfshttpclient",
+    "google-generativeai>=0.8.5",
+    # From your pip freeze output, might be needed by fastapi
+    "python-multipart",
+    "pyyaml>=6.0.3",
+]
+
+[build-system]
+requires = ["rye>=0.1.0", "setuptools>=69.0.0"]
+build-backend = "setuptools.build_meta"

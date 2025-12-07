@@ -12,6 +12,84 @@ This document details the technical design for evolving the AI Escrow Marketplac
 
 ## 3. Proposed Architecture & Changes
 
+### 3. Proposed Architecture & Changes
+
+> [!NOTE]
+> ### Technical Design for Cross-Chain Payments using ERC-8004 Principles
+>
+> This document outlines the technical design for implementing cross-chain payment functionality in VeriFi, enabling clients to pay for contracts on Avalanche using their USDC tokens located on the Ethereum network. This implementation adheres to the principles of **ERC-8004 (Payment Request and Payment Settlement via Cross-Chain Transfer)**, with our AI Agent acting as the "Payment Relayer" or "Payment Resolver".
+>
+> #### Scenario
+>
+> *   **Client:** Holds USDC on the Ethereum Network.
+> *   **Contract:** `AIEscrowMarketplace.sol` on the Avalanche Network expects payment in AVAX (Avalanche's native token).
+> *   **Goal:** The client can "directly" pay the `job.price` on Avalanche using their USDC on Ethereum.
+>
+> #### Components Involved
+>
+> ##### 1. Smart Contract (`AIEscrowMarketplace.sol` on Avalanche)
+>
+> The existing Avalanche contract (`AIEscrowMarketplace.sol`) will continue to expect payment in AVAX. The main modification is that we will **not add** direct ERC-20 payment logic to this contract for cross-chain payments. This contract will retain the `depositForJob(uint256 _jobId) payable` function which accepts AVAX. Conversion and transfer will be handled by the AI Agent.
+>
+> ##### 2. New Smart Contract on Ethereum Network (`ETHReliablePayment.sol`)
+>
+> This contract will serve as the entry point for clients on the Ethereum network.
+>
+> *   **`initiateCrossChainPayment(uint256 _jobId, uint256 _amountUSDC)` Function:**
+>     *   Called by the client on Ethereum.
+>     *   The client will `approve` this contract to spend the necessary amount of USDC.
+>     *   The contract will pull USDC from the client and hold it.
+>     *   It will emit a `CrossChainPaymentInitiated(jobId, sender, amountUSDC, transactionHashEthereum)` event, which the AI Agent will monitor.
+> *   **`releaseHeldUSDC()` Function (for AI Agent):** This function will allow the AI Agent to withdraw USDC from the contract after the event is emitted, for subsequent bridging.
+>
+> ##### 3. AI Agent (as ERC-8004 Payment Relayer/Resolver)
+>
+> This is the most complex and vital component, acting as the off-chain bridge.
+>
+> *   **Ethereum Network Listener:** The AI Agent will continuously monitor the Ethereum network for `CrossChainPaymentInitiated` events from `ETHReliablePayment.sol`.
+> *   **Bridge & Swap Logic:**
+>     1.  **Event Detection:** When a `CrossChainPaymentInitiated` event is detected, the AI Agent will extract `jobId`, `clientAddress`, `amountUSDC`, and `transactionHashEthereum`.
+>     2.  **Withdraw USDC from Ethereum:** Using its configured private key, the AI Agent will call `releaseHeldUSDC()` on `ETHReliablePayment.sol` to withdraw the USDC to its Ethereum address.
+>     3.  **Bridge USDC to Avalanche:** The AI Agent will use a programmatic bridging service (e.g., interacting with the Avalanche Bridge API or another third-party bridging protocol) to transfer the withdrawn USDC from its Ethereum address to its Avalanche C-Chain address.
+>     4.  **Price Oracle:** The AI Agent will query a price oracle (e.g., Chainlink) to get accurate, real-time USDC/AVAX exchange rates.
+>     5.  **Swap USDC to AVAX:** Once USDC arrives at its Avalanche C-Chain address, the AI Agent will interact with a DEX aggregator (e.g., Trader Joe API) on Avalanche to swap the USDC into an amount of AVAX equivalent to the job's `job.price`.
+>     6.  **Gas Payment:** The AI Agent must ensure it has sufficient AVAX in its Avalanche wallet to cover the gas fees for the `depositForJob` transaction.
+> *   **Avalanche Contract Interaction:**
+>     *   With AVAX ready, the AI Agent will call the `depositForJob(jobId)` function on `AIEscrowMarketplace.sol` on Avalanche, depositing the correct amount of AVAX.
+> *   **Error Handling & Status:** The AI Agent needs robust error handling for bridge failures, swap failures, and on-chain transaction failures, and a mechanism to notify the client about the cross-chain payment status.
+>
+> ##### 4. Frontend Changes
+>
+> The frontend will guide the client through the cross-chain payment flow.
+>
+> *   **Payment Method Selection:** In the `CreateJobForm`, clients will have the option: "Pay with AVAX (on Avalanche)" or "Pay with USDC (on Ethereum)".
+> *   **USDC Payment Flow on Ethereum:**
+>     1.  If "Pay with USDC (on Ethereum)" is selected, the frontend will prompt the client to connect their Ethereum wallet.
+>     2.  The frontend will guide the client to `approve` the `ETHReliablePayment.sol` contract to spend their USDC.
+>     3.  The frontend will trigger the `initiateCrossChainPayment(jobId, amountUSDC)` transaction on the `ETHReliablePayment.sol` contract.
+>     4.  The frontend will display the status of the cross-chain payment, informing the client that the AI Agent is processing their payment.
+> *   **UX Feedback:** Clearly communicate all associated costs (Ethereum transaction fees, bridge fees, swap fees, Avalanche transaction fees) and estimated times for the cross-chain transaction.
+>
+> #### 5. Challenges & Considerations
+>
+> *   **Security:** Cross-chain bridges carry significant security risks.
+> *   **Costs:** Each step incurs transaction fees.
+> *   **Latency:** Cross-chain transactions can take several minutes to complete.
+> *   **Oracle Dependence:** Accurate and available price feed oracles are critical.
+> *   **Tokenomics:** If the AI Agent operates decentrally, how is it compensated for its relayer service? This could involve a small service fee.
+>
+> #### Alignment with ERC-8004
+>
+> This design directly implements ERC-8004 principles:
+>
+> *   **Payment Request (on-chain/off-chain):** The frontend displays a payment request for `job.price` (on Avalanche).
+> *   **Payment Initiator:** The client initiates the payment on Ethereum.
+> *   **Payment Asset & Network (Source):** USDC on Ethereum.
+> *   **Payment Asset & Network (Target):** AVAX on Avalanche.
+> *   **Payment Resolver/Relayer:** Our AI Agent acts as the off-chain entity that observes, facilitates cross-chain transfers, performs swaps, and settles the payment on the target network.
+>
+> This project thus conceptually demonstrates how an AI-powered "Payment Resolver" can facilitate cross-chain payments to fulfill contract requests across different networks.
+
 ### 3.1. Smart Contract Changes (`AIEscrowMarketplace.sol`)
 
 To support marketplace functionality, the data structures and workflow will be fundamentally changed.
@@ -128,7 +206,71 @@ classDiagram
 
 The role of the AI Agent is significantly expanded to act as a gatekeeper, verifier, and arbiter. The AI Agent will leverage **Gemini AI for Large Language Model (LLM) processing** in data analysis and decision-making, and will also consider future collaboration with **Kite AI** for enhanced trust and architecture.
 
-#### 3.2.1. Phase 1: Job Feasibility Verification (Pre-Posting)
+> [!NOTE]
+> ### Technical Design for Single-Chain Payments using ERC-8004 Principles
+>
+> This document outlines the technical design for implementing single-chain payment functionality in VeriFi, enabling clients to pay for contracts on Avalanche using their ERC-20 tokens (e.g., USDC) which are also on the Avalanche network. This implementation adheres to the principles of **ERC-8004 (Payment Request and Payment Settlement via Cross-Chain Transfer)**, with our AI Agent acting as the "Payment Relayer" or "Payment Resolver" within the same chain.
+>
+> #### Scenario (Single-Chain)
+>
+> *   **Client:** Holds ERC-20 Tokens (e.g., USDC) on the Avalanche Network.
+> *   **Contract:** `AIEscrowMarketplace.sol` on the Avalanche Network expects payment in AVAX (Avalanche's native token).
+> *   **Goal:** The client can pay the `job.price` on Avalanche using their USDC on Avalanche, with the AI Agent facilitating the token swap.
+>
+> #### Components Involved
+>
+> ##### 1. Smart Contract (`AIEscrowMarketplace.sol` on Avalanche)
+>
+> The `AIEscrowMarketplace.sol` contract will continue to only accept **AVAX** via the `depositForJob(uint256 _jobId) payable` function. This contract will not be modified to directly accept ERC-20 tokens from the client for this payment. The conversion and transfer role will be entirely handled by the AI Agent.
+>
+> ##### 2. AI Agent (as ERC-8004 Payment Relayer/Resolver)
+>
+> This is the vital component that will manage the alternative payment flow.
+>
+> *   **New Endpoint: `POST /resolve-single-chain-payment`:**
+>     *   **Input:** Will receive `jobId`, `clientAddress`, `tokenAddress` (USDC contract address on Avalanche), and `amountToken` (amount of USDC the client will use for payment).
+>     *   **Logic:**
+>         1.  **Get Job Details:** The AI Agent will retrieve the `job.price` (in AVAX) from `AIEscrowMarketplace.sol` using the `jobId`.
+>         2.  **Receive USDC:** The client (via the Frontend) will transfer `amountToken` USDC to the AI Agent's address (or a temporary holding contract managed by the AI Agent). The AI Agent will monitor this transaction or receive notification from the frontend.
+>         3.  **Price Oracle:** The AI Agent will query a price oracle (e.g., Chainlink) on Avalanche to get an accurate, real-time USDC/AVAX exchange rate.
+>         4.  **Calculate AVAX Needed:** Based on `job.price` and the exchange rate, the AI Agent will calculate how much AVAX is required.
+>         5.  **Swap USDC to AVAX:** The AI Agent will interact with a DEX (Decentralized Exchange) aggregator (e.g., Trader Joe API or PancakeSwap API on Avalanche) to swap the USDC received from the client into the equivalent amount of AVAX.
+>         6.  **Gas Payment:** The AI Agent must ensure it has sufficient AVAX in its Avalanche wallet to cover the gas fees for the `depositForJob` transaction.
+>         7.  **Avalanche Contract Interaction:** The AI Agent will call the `depositForJob(jobId)` function on `AIEscrowMarketplace.sol`, depositing the correct amount of AVAX obtained from the swap.
+> *   **Error Handling & Status:** The AI Agent must have robust error handling for swap failures and transaction failures, and a mechanism to notify the client about the payment status.
+>
+> ##### 3. Frontend Changes
+>
+> The frontend will guide the client through the alternative payment flow.
+>
+> *   **Payment Method Selection:** In the `CreateJobForm`, clients will have the option: "Pay with AVAX" or "Pay with USDC".
+> *   **USDC Payment Flow (Single-Chain):**
+>     1.  If "Pay with USDC" is selected, the frontend will prompt the client to `approve` the AI Agent's address (or holding contract) to spend their USDC.
+>     2.  The frontend will trigger a transaction to transfer `amountToken` USDC to the AI Agent's address.
+>     3.  After the USDC transfer is successful, the frontend will call the `POST /resolve-single-chain-payment` endpoint on the AI Agent, passing `jobId`, `clientAddress`, the USDC `tokenAddress`, and `amountToken` transferred.
+>     4.  The frontend will display the payment status, informing the client that the AI Agent is processing the swap and deposit.
+> *   **UX Feedback:** Clearly communicate all associated costs (USDC transaction fees, swap fees, AVAX transaction fees) and the payment status.
+>
+> #### 4. Challenges & Considerations
+>
+> *   **Security:** Managing the AI Agent's private key and its interactions with DEX aggregators.
+> *   **Costs:** Each step (approve, transfer USDC, swap, deposit AVAX) will incur gas fees.
+> *   **Oracle:** Accurate and available price feed oracles are critical for exchange rates.
+> *   **Slippage:** Potential for slippage during DEX swaps.
+>
+> #### Alignment with ERC-8004
+>
+> This design directly implements ERC-8004 principles within a single-chain context:
+>
+> *   **Payment Request (on-chain/off-chain):** The frontend displays a payment request for `job.price` (on Avalanche).
+> *   **Payment Initiator:** The client initiates the payment with USDC on Avalanche.
+> *   **Payment Asset & Network (Source):** USDC on Avalanche.
+> *   **Payment Asset & Network (Target):** AVAX on Avalanche.
+> *   **Payment Resolver/Relayer:** Our AI Agent acts as the off-chain entity that observes token transfers from the client, facilitates DEX swaps, and settles the payment on the target network with the correct token.
+>
+> This project thus conceptually demonstrates how an AI-powered "Payment Resolver" can facilitate payments with different assets to fulfill contract requests on a single network.
+
+### 3.1. Smart Contract Changes (`AIEscrowMarketplace.sol`)
 
 Before a client can post a job to the smart contract, the frontend will first send the job details (title, description, requirements) to the AI Agent via an off-chain API call. The AI will perform a feasibility check based on:
 - **Clarity & Completeness**: Are the requirements clear, specific, and measurable?
