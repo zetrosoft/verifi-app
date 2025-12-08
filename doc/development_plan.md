@@ -1,4 +1,4 @@
-# Development Plan: AI Escrow Marketplace v2
+# Development Plan: AI Escrow Marketplace 
 
 ## 1. Introduction
 
