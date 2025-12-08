@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useWeb3 } from '../../contexts/Web3Context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,7 +33,10 @@ const SubmitWorkForm: React.FC<SubmitWorkFormProps> = ({ jobId, open, onOpenChan
   const [submissionTypeError, setSubmissionTypeError] = useState<string | null>(null);
 
   // State for form fields
-  const [workLink, setWorkLink] = useState(''); // IPFS hash or Repo link
+  const [workLink, setWorkLink] = useState(''); // IPFS hash or Repo link (for repo_link type)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null); // For ipfs_hash type
+  const [isUploadingIPFS, setIsUploadingIPFS] = useState(false); // IPFS upload state
+  const [ipfsUploadError, setIpfsUploadError] = useState<string | null>(null); // IPFS upload error
   const [workSummary, setWorkSummary] = useState('');
   const [testingInstructions, setTestingInstructions] = useState('');
   const [deploymentInstructions, setDeploymentInstructions] = useState('');
@@ -66,6 +69,9 @@ const SubmitWorkForm: React.FC<SubmitWorkFormProps> = ({ jobId, open, onOpenChan
 
     if (open) { // Reset state when modal opens
         setWorkLink('');
+        setSelectedFile(null); // Reset selected file
+        setIsUploadingIPFS(false); // Reset upload state
+        setIpfsUploadError(null); // Reset upload error
         setWorkSummary('');
         setTestingInstructions('');
         setDeploymentInstructions('');
@@ -77,31 +83,67 @@ const SubmitWorkForm: React.FC<SubmitWorkFormProps> = ({ jobId, open, onOpenChan
     }
   }, [open, jobId, AI_AGENT_BASE_URL]);
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      setSelectedFile(event.target.files[0]);
+      setIpfsUploadError(null); // Clear previous errors
+    } else {
+      setSelectedFile(null);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!contract || !account) {
       setError("Wallet not connected.");
       return;
     }
-    if (!workLink || !workSummary.trim()) {
-      setError('Work link/hash and summary are required.');
+    if (loadingSubmissionType || submissionTypeError) {
+      setError("AI is still determining the submission type, please wait or retry.");
       return;
     }
-    if (loadingSubmissionType || submissionTypeError) {
-        setError("AI is still determining the submission type, please wait or retry.");
+    // Validate based on submission type
+    let finalWorkLink = workLink;
+    if (submissionType === "ipfs_hash") {
+      if (!selectedFile) {
+        setError("Please select a file to upload for IPFS submission.");
         return;
+      }
+      setIsUploadingIPFS(true);
+      setIpfsUploadError(null);
+      try {
+        const hash = await uploadFileToIPFS(selectedFile, selectedFile.name);
+        if (!hash) {
+          throw new Error("IPFS upload failed: returned null hash.");
+        }
+        finalWorkLink = hash;
+      } catch (uploadErr: any) {
+        setIpfsUploadError(`IPFS Upload Failed: ${uploadErr.message || "Unknown error."}`);
+        setIsUploadingIPFS(false);
+        return;
+      } finally {
+        setIsUploadingIPFS(false);
+      }
+    } else { // repo_link
+      if (!workLink || !workLink.trim()) {
+        setError("Repository link is required.");
+        return;
+      }
+    }
+
+    if (!workSummary.trim()) {
+      setError('Work summary is required.');
+      return;
     }
 
     setIsSubmitting(true);
     setError(null);
-
     try {
       // 1. Combine all form data into a single object
       const submissionData = {
         jobId: jobId,
         freelancerAddress: account,
         submissionType: submissionType,
-        workLink: workLink,
+        workLink: finalWorkLink, // Use finalWorkLink here
         workSummary: workSummary.trim(),
         testingInstructions: testingInstructions.trim(),
         deploymentInstructions: deploymentInstructions.trim(),
@@ -183,19 +225,28 @@ const SubmitWorkForm: React.FC<SubmitWorkFormProps> = ({ jobId, open, onOpenChan
 
               {/* Work Link/Hash Input */}
               <div className="grid gap-2">
-                <Label htmlFor="workLink">
-                  {submissionType === "ipfs_hash" ? (
-                    <span className="flex items-center"><Image className="mr-2 h-4 w-4"/> IPFS Hash of Result</span>
-                  ) : (
-                    <span className="flex items-center"><GitFork className="mr-2 h-4 w-4"/> Repository Link</span>
-                  )}
-                </Label>
-                <Input
-                  id="workLink"
-                  value={workLink}
-                  onChange={(e) => setWorkLink(e.target.value)}
-                  placeholder={submissionType === "ipfs_hash" ? "e.g., Qm... (IPFS hash of your deliverables)" : "e.g., https://github.com/user/repo"}
-                />
+                {submissionType === "ipfs_hash" ? (
+                  <>
+                    <Label htmlFor="workFile">
+                      <span className="flex items-center"><Image className="mr-2 h-4 w-4"/> Select File for IPFS Upload</span>
+                    </Label>
+                    <Input id="workFile" type="file" onChange={handleFileChange} className="col-span-3" />
+                    {selectedFile && <p className="text-sm text-muted-foreground">Selected: {selectedFile.name}</p>}
+                    {ipfsUploadError && <Alert variant="destructive"><AlertDescription>{ipfsUploadError}</AlertDescription></Alert>}
+                  </>
+                ) : (
+                  <>
+                    <Label htmlFor="workLink">
+                      <span className="flex items-center"><GitFork className="mr-2 h-4 w-4"/> Repository Link</span>
+                    </Label>
+                    <Input
+                      id="workLink"
+                      value={workLink}
+                      onChange={(e) => setWorkLink(e.target.value)}
+                      placeholder="e.g., https://github.com/user/repo"
+                    />
+                  </>
+                )}
               </div>
 
               {/* Work Summary */}
@@ -256,11 +307,11 @@ const SubmitWorkForm: React.FC<SubmitWorkFormProps> = ({ jobId, open, onOpenChan
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
+          <Button variant="outline" onClick={handleClose} disabled={isSubmitting || isUploadingIPFS}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting || loadingSubmissionType || submissionTypeError || !workLink || !workSummary.trim()}>
-            {isSubmitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</> : 'Submit Work'}
+          <Button onClick={handleSubmit} disabled={isSubmitting || loadingSubmissionType || submissionTypeError || isUploadingIPFS || (submissionType === "ipfs_hash" ? !selectedFile : !workLink) || !workSummary.trim()}>
+            {isSubmitting || isUploadingIPFS ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> {isUploadingIPFS ? 'Uploading to IPFS...' : 'Submitting...'}</> : 'Submit Work'}
           </Button>
         </DialogFooter>
       </DialogContent>

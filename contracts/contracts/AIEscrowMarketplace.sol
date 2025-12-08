@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.20; // Locked to a specific compiler version to avoid known issues with ^
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -95,8 +95,8 @@ contract AIEscrowMarketplace is Ownable, ReentrancyGuard {
         _;
     }
 
-    modifier atJobStatus(uint256 _jobId, Status _status) {
-        require(jobs[_jobId].status == _status, "AIEscrow: Job is not in the required status");
+    modifier atJobStatus(uint256 _jobId, Status _expectedStatus) {
+        require(jobs[_jobId].status == _expectedStatus, "AIEscrow: Job is not in the required status");
         _;
     }
     
@@ -138,7 +138,10 @@ contract AIEscrowMarketplace is Ownable, ReentrancyGuard {
         require(bytes(_title).length > 0, "AIEscrow: Job title cannot be empty");
         require(bytes(_descriptionIPFSHash).length > 0, "AIEscrow: Work description IPFS hash cannot be empty");
         require(_price > 0, "AIEscrow: Price must be greater than zero");
-        require(_deadline > block.timestamp, "AIEscrow: Deadline must be in the future");
+        // Mitigating block.timestamp dependency by requiring _deadline to be a future block number.
+        // IMPORTANT: This changes the interpretation of _deadline from Unix timestamp to block number.
+        // Frontend must be updated to provide a future block number.
+        require(_deadline > block.number, "AIEscrow: Deadline block must be in the future");
 
         uint256 jobId = nextJobId;
         jobs[jobId] = Job({
@@ -214,21 +217,22 @@ contract AIEscrowMarketplace is Ownable, ReentrancyGuard {
 
         require(msg.value == totalAmountExpected, "AIEscrow: Incorrect deposit amount. Expected job.price + clientFee.");
 
-        // Transfer client fee to the designated wallet
-        if (clientFee > 0) {
-            (bool success, ) = payable(aiAgentFeeWallet).call{value: clientFee}(""); // Use call for robustness
-            require(success, "AIEscrow: Failed to transfer client fee"); // Ensure call succeeded
-        }
-
         // The remaining amount (job.price) is implicitly held in the contract for escrow.
         job.status = Status.FundsDeposited;
-        // No deadline recalculation here, it uses the original posted deadline
         emit FundsDeposited(_jobId, msg.value, clientFee);
+
+        // Transfer client fee to the designated wallet
+        if (clientFee > 0) {
+            payable(aiAgentFeeWallet).transfer(clientFee); // Changed to transfer for safety.
+            // require(success, "AIEscrow: Failed to transfer client fee"); // transfer throws on failure
+        }
     }
 
     function submitWork(uint256 _jobId, string memory _resultIPFSHash) external onlyJobFreelancer(_jobId) atJobStatus(_jobId, Status.FundsDeposited) {
         require(bytes(_resultIPFSHash).length > 0, "AIEscrow: Result IPFS hash cannot be empty");
-        require(block.timestamp < jobs[_jobId].deadline, "AIEscrow: Deadline has passed"); // Original deadline check
+        // Mitigating block.timestamp dependency by comparing with block.number.
+        // Assumes jobs[_jobId].deadline is now a block number.
+        require(block.number < jobs[_jobId].deadline, "AIEscrow: Deadline block has passed");
 
         Job storage job = jobs[_jobId];
         job.resultIPFSHash = _resultIPFSHash;
@@ -252,15 +256,20 @@ contract AIEscrowMarketplace is Ownable, ReentrancyGuard {
     function resolveDispute(uint256 _jobId, bool _releaseToFreelancer) external nonReentrant onlyAiAgent atJobStatus(_jobId, Status.Disputed) {
         Job storage job = jobs[_jobId];
 
+        // First, apply all state changes and emit event for this function's logic
         if (_releaseToFreelancer) {
-            _releaseFunds(_jobId);
+            job.status = Status.Completed;
         } else {
-            // Refund client the full escrowed job.price
             job.status = Status.Cancelled;
-            (bool success, ) = job.client.call{value: job.price}(""); // Refund job.price, client fee is non-refundable
-            require(success, "AIEscrow: Failed to refund client");
         }
         emit DisputeResolved(_jobId, _releaseToFreelancer);
+
+        // Then, perform external interactions
+        if (_releaseToFreelancer) {
+            _releaseFunds(_jobId); // This internal function now performs the external transfers
+        } else {
+            job.client.transfer(job.price); // Refund client
+        }
     }
 
     function verifyWork(uint256 _jobId, bool _isApproved) external nonReentrant onlyAiAgent atJobStatus(_jobId, Status.WorkSubmitted) {
@@ -268,13 +277,13 @@ contract AIEscrowMarketplace is Ownable, ReentrancyGuard {
         
         if (_isApproved) {
             job.status = Status.Verified;
+            emit WorkVerified(_jobId, _isApproved); // Emit after state update
         } else {
             job.status = Status.Cancelled;
-            (bool success, ) = job.client.call{value: job.price}(""); // Refund job.price, client fee is non-refundable
-            require(success, "AIEscrow: Failed to refund client on rejection");
+            emit WorkVerified(_jobId, _isApproved); // Emit after state update, before external call
+            job.client.transfer(job.price); // Refund job.price, client fee is non-refundable. Changed to transfer for safety.
+            // require(success, "AIEscrow: Failed to refund client on rejection"); // transfer throws on failure
         }
-
-        emit WorkVerified(_jobId, _isApproved);
     }
 
     function clientReleaseFunds(uint256 _jobId) external nonReentrant jobMustExist(_jobId) onlyClientOfJob(_jobId) atJobStatus(_jobId, Status.Verified) {
@@ -293,15 +302,17 @@ contract AIEscrowMarketplace is Ownable, ReentrancyGuard {
         uint256 freelancerFee = (job.price * FREELANCER_FEE_PERCENT) / 100;
         uint256 amountToFreelancer = job.price - freelancerFee;
 
+        // All state updates and event emissions should happen before external calls
+        emit FundsReleased(_jobId, job.freelancer, amountToFreelancer, freelancerFee); // netAmount, feeAmount
+
         // Transfer freelancer fee to the designated wallet
         if (freelancerFee > 0) {
             payable(aiAgentFeeWallet).transfer(freelancerFee);
         }
         
         // Transfer net amount to freelancer
-        (bool success, ) = job.freelancer.call{value: amountToFreelancer}("");
-        require(success, "AIEscrow: Failed to release funds to freelancer");
-
-        emit FundsReleased(_jobId, job.freelancer, amountToFreelancer, freelancerFee); // netAmount, feeAmount
+        // Changed to transfer for safety against reentrancy
+        job.freelancer.transfer(amountToFreelancer);
+        // require(success, "AIEscrow: Failed to release funds to freelancer"); // transfer throws on failure, no need for require(success)
     }
 }

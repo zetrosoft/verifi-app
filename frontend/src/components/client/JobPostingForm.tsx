@@ -7,6 +7,10 @@ interface JobPostingFormProps {
   onJobPosted: () => void; // Callback to refresh job list
 }
 
+const JobPostingForm: React.FC<JobPostingFormProps> = ({ onJobPosted }) => {
+  const { signer, account, provider } = useWeb3();
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [durationValue, setDurationValue] = useState('1');
   const [durationUnit, setDurationUnit] = useState('weeks'); // 'days', 'weeks', 'months'

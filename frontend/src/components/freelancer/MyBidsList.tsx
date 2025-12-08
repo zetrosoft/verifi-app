@@ -57,6 +57,7 @@ const dummyMyBids = [
   },
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 interface MyBidsListProps {
   // Add props if needed, e.g., onCancelBid
 }
