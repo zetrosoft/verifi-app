@@ -627,7 +627,7 @@ sequenceDiagram
 ```
 
 ## 5. Technology & Integration
-- **Frontend:** React (fully responsive Web app), Vite, Ethers.js (or Viem) for blockchain interaction.
-- **Styling:** **Material-UI (MUI)** for building a professional and consistent dashboard theme.
-- **Off-chain Storage:** IPFS (via `web3.storage` or Pinata) for storing job description files and work results.
+- **Frontend:** React (fully responsive Web app), Vite, Ethers.js for blockchain interaction.
+- **Styling:** **Radix, TailwindCSS** for building a professional and consistent dashboard theme.
+- **Off-chain Storage:** IPFS for storing job description files and work results.
 - **AI Agent:** Python (FastAPI) server that communicates with the blockchain and IPFS.
